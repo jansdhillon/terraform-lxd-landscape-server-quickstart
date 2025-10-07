@@ -1,5 +1,5 @@
 resource "lxd_cached_image" "image_name" {
-  source_image  = var.instance.fingerprint != null ? var.instance.fingerprint : var.instance.image_alias
+  source_image  = coalesce(var.instance.fingerprint, var.instance.image_alias, var.fingerprint, var.image_alias)
   source_remote = var.instance.remote
 
   lifecycle {
@@ -47,7 +47,7 @@ resource "lxd_instance" "instance" {
 
   execs = merge(
     {
-      "000-install-prereqs" = {
+      "0000-install-prereqs" = {
         command = [
           "/bin/bash", "-c",
           "apt-get update && apt-get install -y ca-certificates software-properties-common"
@@ -56,20 +56,22 @@ resource "lxd_instance" "instance" {
         record_output = true
         fail_on_error = true
       },
-      "001-add-ppa" = {
+      "0001-add-ppas" = {
         command = [
           "/bin/bash", "-c",
-          "add-apt-repository -y ${coalesce(var.instance.ppa, var.ppa)}"
+          join(" && ", [
+            for ppa in coalesce(var.instance.ppas, var.ppas) :
+            "add-apt-repository -y ${ppa}"
+          ])
         ]
         trigger       = "once"
         record_output = true
         fail_on_error = true
-        enabled       = length(compact([var.instance.ppa, var.ppa])) > 0
       },
-      "002-install-landscape-server-quickstart" = {
+      "0002-install-quickstart" = {
         command = [
           "/bin/bash", "-c",
-          "DEBIAN_FRONTEND=noninteractive apt-get install -y landscape-server-quickstart"
+          "apt-get update && apt-get install -y landscape-server-quickstart"
         ]
         trigger       = "once"
         record_output = true

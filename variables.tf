@@ -12,14 +12,14 @@ variable "fingerprint" {
 
 variable "image_alias" {
   type        = string
-  default     = null
+  default     = "noble"
   description = "Default alias of image. Can be overridden per instance. Takes precedence over fingerprint if both are specified."
 }
 
 variable "instance" {
   type = object({
     instance_name = string
-    lxd_config   = optional(map(string))
+    lxd_config    = optional(map(string))
     devices = optional(list(object({
       name       = string
       type       = string
@@ -47,32 +47,25 @@ variable "instance" {
       create_directories = optional(bool, false)
     })), [])
     fingerprint   = optional(string)
-    image_alias   = optional(string, "noble")
+    image_alias   = optional(string)
     instance_type = optional(string, "container")
-    ppa           = optional(string, "ppa:landscape/self-hosted-beta")
+    ppas          = optional(list(string))
     profiles      = optional(list(string))
     pro_token     = optional(string)
     remote        = optional(string, "ubuntu")
   })
 
   validation {
-    condition = (
-      (var.instance.fingerprint != null || var.instance.image_alias != null)
-    )
-    error_message = "Either var.instance.fingerprint or var.instance.image_alias must be set."
-  }
-
-  validation {
-    condition = contains(["virtual-machine", "container"], var.instance.instance_type)
+    condition     = contains(["virtual-machine", "container"], var.instance.instance_type)
     error_message = "valid values are: virtual-machine, container"
   }
 }
 
 
 
-variable "ppa" {
-  type    = string
-  default = null
+variable "ppas" {
+  type    = list(string)
+  default = ["ppa:landscape/self-hosted-beta"]
 }
 
 variable "pro_token" {
