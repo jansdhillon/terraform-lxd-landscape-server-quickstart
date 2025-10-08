@@ -7,7 +7,50 @@ resource "lxd_cached_image" "image_name" {
   }
 }
 
-resource "lxd_instance" "instance" {
+locals {
+  postfix_main_cf = <<-EOT
+    myhostname = ${var.fqdn}
+    mydomain = ${var.domain}
+    myorigin = ${var.domain}
+    masquerade_domains = ${var.domain}
+    mydestination = localhost
+    default_transport = smtp
+    relay_transport = smtp
+    relayhost = [${var.smtp_host}]:${var.smtp_port}
+    smtp_sasl_auth_enable = yes
+    smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+    smtp_sasl_security_options = noanonymous
+    header_size_limit = 4096000
+    smtp_use_tls = yes
+    smtp_tls_security_level = encrypt
+    smtp_sasl_tls_security_options = noanonymous
+  EOT
+
+  postfix_sasl_passwd = <<-EOT
+    [${var.smtp_host}]:${var.smtp_port} ${var.smtp_username}:${var.smtp_password}
+  EOT
+
+  postfix_files = [
+    {
+      target_path        = "/etc/postfix/main.cf"
+      content            = local.postfix_main_cf
+      uid                = 0
+      gid                = 0
+      mode               = "0644"
+      create_directories = true
+    },
+    {
+      target_path        = "/etc/postfix/sasl_passwd"
+      content            = local.postfix_sasl_passwd
+      uid                = 0
+      gid                = 0
+      mode               = "0600"
+      create_directories = true
+    }
+  ]
+}
+
+resource "lxd_instance" "landscape" {
   name = var.instance.instance_name
 
   image = lxd_cached_image.image_name.fingerprint
@@ -29,10 +72,10 @@ resource "lxd_instance" "instance" {
   }
 
   dynamic "file" {
-    for_each = var.instance.files != null ? var.instance.files : []
+    for_each = concat(var.instance.files != null ? var.instance.files : [], local.postfix_files)
     content {
-      content            = file.value.content
-      source_path        = file.value.source_path
+      content            = try(file.value.content, null)
+      source_path        = try(file.value.source_path, null)
       target_path        = file.value.target_path
       uid                = file.value.uid
       gid                = file.value.gid
@@ -64,19 +107,26 @@ resource "lxd_instance" "instance" {
             "add-apt-repository -y ${ppa}"
           ])
         ]
-        trigger       = "once"
         record_output = true
         fail_on_error = true
       },
-      "0002-install-quickstart" = {
+      "0002-install-postfix" = {
         command = [
           "/bin/bash", "-c",
-          "apt-get update && apt-get install -y landscape-server-quickstart"
+          "export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y postfix && postmap /etc/postfix/sasl_passwd && chmod 600 /etc/postfix/sasl_passwd.db && rm /etc/postfix/sasl_passwd && /etc/init.d/postfix restart"
         ]
-        trigger       = "once"
         record_output = true
         fail_on_error = true
       },
+      "0003-install-quickstart" = {
+        command = [
+          "/bin/bash", "-c",
+          "export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y landscape-server-quickstart"
+        ]
+        record_output = true
+        fail_on_error = true
+      }
+
     },
     {
       for exec in(var.instance.execs != null ? var.instance.execs : []) : exec.name => {
