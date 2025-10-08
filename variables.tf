@@ -91,5 +91,36 @@ variable "registration_key" {
 variable "timeout" {
   type        = string
   description = "duration string to wait for instances to deploy"
-  default     = "10m"
+  default     = "15m"
+}
+
+variable "smtp_host" {
+  type    = string
+  default = "smtp.sendgrid.net"
+}
+
+variable "smtp_port" {
+  type    = number
+  default = 587
+}
+
+variable "smtp_username" {
+  type    = string
+  default = "apikey"
+}
+
+variable "smtp_password" {
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "fqdn" {
+  type        = string
+  default     = "landscape.example.com"
+}
+
+variable "domain" {
+  type        = string
+  default     = "example.com"
 }
